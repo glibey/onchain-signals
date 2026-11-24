@@ -1,0 +1,26 @@
+# Fly.io config. Create the app and volume first (see README → Deploy).
+app = "onchain-signals"          # change if the name is taken
+primary_region = "iad"
+
+[build]
+
+[env]
+  NETWORK = "eip155:84532"       # switch to eip155:8453 for mainnet (needs CDP keys as secrets)
+  TRUST_PROXY = "fly"
+
+[[mounts]]
+  source = "data"                # SQLite payment ledger lives here
+  destination = "/data"
+
+[http_service]
+  internal_port = 4021
+  force_https = true
+  auto_stop_machines = "off"     # one always-on machine: SQLite is single-writer
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"

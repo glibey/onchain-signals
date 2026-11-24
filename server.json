@@ -1,0 +1,56 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.glibey/onchain-signals",
+  "description": "Pay-per-call Polymarket intelligence for AI agents: MCP server + x402 (USDC) API",
+  "version": "0.3.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "onchain-signals-mcp",
+      "version": "0.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CLIENT_PRIVATE_KEY",
+          "description": "Private key of a dedicated payer wallet holding a little USDC on Base. Without it only free tools work.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CLIENT_ALLOW_MAINNET",
+          "description": "Set to 1 to allow paying real USDC on Base mainnet.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "CLIENT_MAX_USD",
+          "description": "Refuse any single call priced above this (USD, default 0.05).",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "CLIENT_SESSION_BUDGET_USD",
+          "description": "Stop paying after this much in one session (USD, default 1).",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://13-49-215-169.sslip.io/mcp"
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/glibey/onchain-signals",
+    "source": "github"
+  }
+}

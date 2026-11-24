@@ -1,0 +1,5 @@
+# Managed by `npm run prod caddy`. HTTPS with an automatic Let's Encrypt certificate.
+{{DOMAIN}} {
+	encode gzip
+	reverse_proxy 127.0.0.1:4021
+}

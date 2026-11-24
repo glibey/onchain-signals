@@ -1,0 +1,69 @@
+{
+  "name": "onchain-signals-mcp",
+  "version": "0.3.0",
+  "description": "Pay-per-call Polymarket intelligence for AI agents: MCP server + x402 (USDC) API",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "client": "tsx --env-file-if-exists=.env src/client.ts",
+    "wallet:new": "tsx src/new-wallet.ts",
+    "mcp": "tsx src/mcp.ts",
+    "revenue": "tsx --env-file-if-exists=.env src/revenue.ts",
+    "test": "vitest run",
+    "prepublishOnly": "tsc && vitest run",
+    "prod": "bash deploy/prod.sh"
+  },
+  "keywords": [
+    "mcp",
+    "x402",
+    "polymarket",
+    "prediction-markets",
+    "ai-agents",
+    "base",
+    "usdc"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "^2.1.11",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@x402/core": "^2.32.0",
+    "@x402/evm": "^2.32.0",
+    "@x402/extensions": "^2.32.0",
+    "@x402/fetch": "^2.32.0",
+    "@x402/hono": "^2.32.0",
+    "@x402/mcp": "^2.32.0",
+    "hono": "^4.13.21",
+    "viem": "^2.58.6",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  },
+  "bin": {
+    "onchain-signals-mcp": "dist/mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.5"
+  },
+  "mcpName": "io.github.glibey/onchain-signals",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glibey/onchain-signals.git"
+  },
+  "homepage": "https://github.com/glibey/onchain-signals#readme",
+  "bugs": {
+    "url": "https://github.com/glibey/onchain-signals/issues"
+  }
+}
