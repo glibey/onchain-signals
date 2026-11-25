@@ -152,7 +152,9 @@ describe("remote MCP (/mcp)", () => {
     upstream(true);
     const { appFetch, facilitator, ledger } = setup();
     const client = await mcpClient(appFetch);
-    const tools = (await client.listTools()).tools.map((t: any) => t.name).sort();
+    const listed = (await client.listTools()).tools;
+    expect(listed.every((t: any) => t.annotations?.readOnlyHint === true)).toBe(true);
+    const tools = listed.map((t: any) => t.name).sort();
     expect(tools).toEqual(["analyze_market", "get_market_movers", "get_whale_trades", "list_services"]);
     const r = await client.callTool("get_whale_trades", { min: 20000 });
     expect(r.isError).toBeFalsy();
@@ -171,5 +173,21 @@ describe("remote MCP (/mcp)", () => {
     expect(facilitator.settle).not.toHaveBeenCalled();
     expect(ledger.summary().calls).toBe(0);
     await client.close();
+  });
+});
+
+describe("release metadata", () => {
+  it("keeps VERSION, package.json and server.json in sync", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { VERSION } = await import("../src/tools.js");
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const srv = JSON.parse(readFileSync("server.json", "utf8"));
+    expect([pkg.version, srv.version, srv.packages[0].version]).toEqual([VERSION, VERSION, VERSION]);
+  });
+
+  it("documents every argument and marks tools read-only", async () => {
+    const { TOOLS } = await import("../src/tools.js");
+    for (const t of Object.values(TOOLS))
+      for (const [arg, schema] of Object.entries(t.input)) expect((schema as any).description, arg).toBeTruthy();
   });
 });

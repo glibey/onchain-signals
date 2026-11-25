@@ -3,7 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createPaymentWrapper, type x402ResourceServer } from "@x402/mcp";
-import { TOOLS, type ToolName } from "./tools.js";
+import { TOOLS, READ_ONLY, VERSION, type ToolName } from "./tools.js";
 
 type Opts = { resourceServer: x402ResourceServer; payTo: string; network: `${string}:${string}`; catalog: () => unknown };
 
@@ -31,13 +31,13 @@ export function remoteMcp(o: Opts) {
 
   return async (req: Request): Promise<Response> => {
     const paid = await getWrappers();
-    const server = new McpServer({ name: "onchain-signals", version: "0.2.0" });
+    const server = new McpServer({ name: "onchain-signals", title: "Onchain Signals", version: VERSION });
 
     for (const name of Object.keys(TOOLS) as ToolName[]) {
       const t = TOOLS[name] as (typeof TOOLS)[ToolName];
       server.registerTool(
         name,
-        { title: t.title, description: `${t.description} Paid: ${t.price} per call (x402, USDC).`, inputSchema: t.input },
+        { title: t.title, description: `${t.description} Paid: ${t.price} per call (x402, USDC).`, inputSchema: t.input, annotations: { title: t.title, ...READ_ONLY } },
         // A thrown error becomes isError, and the payment wrapper does not settle failed calls.
         paid[name](async (args: any) => {
           try {
@@ -50,7 +50,7 @@ export function remoteMcp(o: Opts) {
     }
     server.registerTool(
       "list_services",
-      { title: "List services and prices", description: "Free. What onchain-signals sells and current prices.", inputSchema: {} },
+      { title: "List services and prices", description: "Free. What onchain-signals sells and current prices.", inputSchema: {}, annotations: { title: "List services and prices", ...READ_ONLY } },
       async () => text(o.catalog()),
     );
 

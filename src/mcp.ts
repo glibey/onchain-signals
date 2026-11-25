@@ -15,7 +15,7 @@ import { ExactEvmScheme } from "@x402/evm";
 import { createPublicClient, http, erc20Abi, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, baseSepolia } from "viem/chains";
-import { TOOLS } from "./tools.js";
+import { TOOLS, READ_ONLY, VERSION } from "./tools.js";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -86,19 +86,19 @@ async function paidCall(tool: string, path: string) {
 }
 
 // ---- server -------------------------------------------------------------
-const server = new McpServer({ name: "onchain-signals", version: "0.2.0" });
+const server = new McpServer({ name: "onchain-signals", title: "Onchain Signals", version: VERSION });
 
 for (const [name, t] of Object.entries(TOOLS)) {
   server.registerTool(
     name,
-    { title: t.title, description: `${t.description} Paid: ~${t.price} per call (x402, USDC).`, inputSchema: t.input },
+    { title: t.title, description: `${t.description} Paid: ~${t.price} per call (x402, USDC).`, inputSchema: t.input, annotations: { title: t.title, ...READ_ONLY } },
     async (a: any) => paidCall(name, (t.path as (a: unknown) => string)(a)),
   );
 }
 
 server.registerTool(
   "list_services",
-  { title: "List services and prices", description: "Free. Lists what the onchain-signals API sells and current prices.", inputSchema: {} },
+  { title: "List services and prices", description: "Free. Lists what the onchain-signals API sells and current prices.", inputSchema: {}, annotations: { title: "List services and prices", ...READ_ONLY } },
   async () => {
     try {
       return text(await (await fetch(new URL("/.well-known/x402", API_URL))).json());
@@ -110,7 +110,7 @@ server.registerTool(
 
 server.registerTool(
   "wallet_status",
-  { title: "Wallet & spend status", description: "Free. Payer wallet address, USDC balance, spend this session and remaining budget.", inputSchema: {} },
+  { title: "Wallet & spend status", description: "Free. Payer wallet address, USDC balance, spend this session and remaining budget.", inputSchema: {}, annotations: { title: "Wallet & spend status", ...READ_ONLY } },
   async () => {
     let balance: number | null = null;
     if (account && lastOffer) {

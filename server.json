@@ -1,13 +1,24 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.glibey/onchain-signals",
+  "title": "Onchain Signals",
   "description": "Pay-per-call Polymarket intelligence for AI agents: MCP server + x402 (USDC) API",
-  "version": "0.3.0",
+  "websiteUrl": "https://github.com/glibey/onchain-signals",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/glibey/onchain-signals/main/assets/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
+  "version": "0.3.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "onchain-signals-mcp",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "transport": {
         "type": "stdio"
       },

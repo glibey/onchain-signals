@@ -1,6 +1,6 @@
 {
   "name": "onchain-signals-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pay-per-call Polymarket intelligence for AI agents: MCP server + x402 (USDC) API",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",

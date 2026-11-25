@@ -6,22 +6,27 @@ const qs = (o: Record<string, unknown>) =>
   new URLSearchParams(Object.entries(o).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString();
 
 const moversInput = {
-  window: z.enum(["1d", "1w"]).default("1d").describe("Lookback window"),
-  limit: z.number().int().min(1).max(50).default(20),
-  minVolume: z.number().min(0).default(10000).describe("Minimum 24h volume in USD"),
+  window: z.enum(["1d", "1w"]).default("1d").describe("Lookback window for the price change: '1d' (24 hours) or '1w' (7 days)"),
+  limit: z.number().int().min(1).max(50).default(20).describe("How many markets to return (1-50)"),
+  minVolume: z.number().min(0).default(10000).describe("Skip markets with less than this 24h trading volume, in USD"),
 };
 const whalesInput = {
-  min: z.number().min(100).default(10000).describe("Minimum trade size in USD"),
+  min: z.number().min(100).default(10000).describe("Only count trades of at least this size, in USD"),
   limit: z.number().int().min(1).max(500).default(200).describe("How many recent large trades to scan"),
 };
 const marketInput = {
   slug: z.string().min(1).describe("Market slug or polymarket.com URL, e.g. 'new-nvidia-ceo-named-by-december-31-2026'"),
-  min: z.number().min(100).default(5000).describe("Whale threshold in USD"),
+  min: z.number().min(100).default(5000).describe("Trades of at least this size (USD) count as whale trades in the flow analysis"),
 };
 
 const toSlug = (s: string) => s.replace(/^.*\/market\//, "").replace(/[?#].*$/, "");
 
 type Shape = Record<string, z.ZodTypeAny>;
+export const VERSION = "0.3.1"; // keep in sync with package.json and server.json (checked by tests)
+
+/** MCP tool annotations: every tool only reads public market data. */
+export const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } as const;
+
 export type Tool<S extends Shape> = {
   route: string; // HTTP route key, as the paywall sees it
   price: string;
