@@ -42,7 +42,9 @@ describe("free endpoints", () => {
     const { app } = setup();
     const res = await app.request("/.well-known/x402");
     expect(res.status).toBe(200);
-    expect((await res.json()).resources.map((r: any) => r.path)).toEqual(["/v1/markets/movers", "/v1/whales", "/v1/market/{slug}"]);
+    expect((await res.json()).resources.map((r: any) => r.path)).toEqual([
+      "/v1/markets/movers", "/v1/whales", "/v1/market/{slug}", "/v1/trader/{wallet}", "/v1/traders/top", "/v1/smart-money",
+    ]);
   });
 
   it("are rate limited per IP", async () => {
@@ -102,6 +104,24 @@ describe("paid endpoints", () => {
     expect(req.accepts[0].amount).toBe("10000");
   });
 
+  it("price trader tools at $0.05", async () => {
+    const { app } = setup();
+    for (const path of ["/v1/trader/0x000000000000000000000000000000000000dEaD", "/v1/traders/top", "/v1/smart-money"]) {
+      const res = await app.request(path);
+      expect(res.status).toBe(402);
+      const req = JSON.parse(Buffer.from(res.headers.get("payment-required")!, "base64").toString());
+      expect(req.accepts[0].amount).toBe("50000");
+    }
+  });
+
+  it("never charge for an unknown wallet", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ data: [] })));
+    const { payFetch, facilitator } = setup();
+    expect((await payFetch("http://local.test/v1/trader/0x000000000000000000000000000000000000dEaD")).status).toBe(404);
+    expect((await payFetch("http://local.test/v1/trader/not-a-wallet")).status).toBe(404);
+    expect(facilitator.settle).not.toHaveBeenCalled();
+  });
+
   it("never charge for a 404", async () => {
     vi.stubGlobal("fetch", async () => new Response("[]"));
     const { payFetch, facilitator } = setup();
@@ -155,7 +175,9 @@ describe("remote MCP (/mcp)", () => {
     const listed = (await client.listTools()).tools;
     expect(listed.every((t: any) => t.annotations?.readOnlyHint === true)).toBe(true);
     const tools = listed.map((t: any) => t.name).sort();
-    expect(tools).toEqual(["analyze_market", "get_market_movers", "get_whale_trades", "list_services"]);
+    expect(tools).toEqual([
+      "analyze_market", "get_market_movers", "get_smart_money", "get_top_traders", "get_trader_profile", "get_whale_trades", "list_services",
+    ]);
     const r = await client.callTool("get_whale_trades", { min: 20000 });
     expect(r.isError).toBeFalsy();
     expect(r.paymentMade).toBe(true);

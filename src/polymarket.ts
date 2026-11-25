@@ -122,3 +122,171 @@ export async function market(slug: string, minUsd: number) {
     signal: { notes },
   };
 }
+
+// ---- traders ------------------------------------------------------------------------------
+
+/** Run fn over items with at most `n` in flight (keeps us polite to Polymarket's rate limits). */
+async function mapLimit<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) { const k = i++; out[k] = await fn(items[k]); }
+  }));
+  return out;
+}
+
+const round = (v: number, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
+
+export type Tier = "sharp" | "profitable" | "break-even" | "losing" | "unproven";
+
+/** Track record from closed positions. Callers pass the most recent ones (not the best ones) so win rate is unbiased. */
+export function trackRecord(closed: Json[]) {
+  const pnls = closed.map((p) => Number(p.realized_pnl) || 0);
+  const wins = pnls.filter((v) => v > 0), losses = pnls.filter((v) => v < 0);
+  const decided = wins.length + losses.length;
+  const grossWin = wins.reduce((a, b) => a + b, 0), grossLoss = -losses.reduce((a, b) => a + b, 0);
+  const holds = closed
+    .map((p) => (Number(p.last_event_at) - Number(p.first_entry_at)) / 86400)
+    .filter((d) => Number.isFinite(d) && d >= 0)
+    .sort((a, b) => a - b);
+  const winRate = decided ? wins.length / decided : null;
+  const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? null : 0; // null = no losses yet
+  const realizedPnl = grossWin - grossLoss;
+  const tier: Tier =
+    decided < 20 ? "unproven"
+    : winRate! >= 0.55 && (profitFactor == null || profitFactor >= 1.3) && realizedPnl > 0 ? "sharp"
+    : realizedPnl > 0 && (profitFactor == null || profitFactor >= 1.05) ? "profitable"
+    : realizedPnl < 0 && profitFactor! < 0.95 ? "losing"
+    : "break-even";
+  return {
+    closedPositions: closed.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate: winRate == null ? null : round(winRate, 3),
+    realizedPnl: Math.round(realizedPnl),
+    avgWin: wins.length ? Math.round(grossWin / wins.length) : null,
+    avgLoss: losses.length ? Math.round(-grossLoss / losses.length) : null,
+    profitFactor: profitFactor == null ? null : round(profitFactor),
+    medianHoldDays: holds.length ? round(holds[Math.floor(holds.length / 2)], 1) : null,
+    tier,
+  };
+}
+
+/** Polymarket's auto-generated display names ("0xabc…-1759935795465") carry no information. */
+const cleanName = (n?: string | null) => (!n || /^0x[0-9a-fA-F]{40}-\d+$/.test(n) ? null : n);
+
+const isWallet = (w: string) => /^0x[0-9a-fA-F]{40}$/.test(w);
+
+/** Most recent closed positions of a wallet (sorted by time, not by PnL). */
+const closedPositions = (wallet: string, limit: number) =>
+  get<{ data: Json[] }>(`${DATA}/positions?user=${wallet}&status=CLOSED&sort_by=TIMESTAMP&limit=${limit}`).then((r) => r.data ?? []);
+
+export async function traderRecord(wallet: string, sample = 300) {
+  return trackRecord(await closedPositions(wallet.toLowerCase(), sample));
+}
+
+/** Full profile of one wallet: track record, open book, recent trades. */
+export async function trader(wallet: string) {
+  if (!isWallet(wallet)) return null;
+  const w = wallet.toLowerCase();
+  const [closed, open, value, trades] = await Promise.all([
+    closedPositions(w, 500),
+    get<{ data: Json[] }>(`${DATA}/positions?user=${w}&status=OPEN&limit=100`).then((r) => r.data ?? []),
+    get<{ data: Json }>(`${DATA}/value?user=${w}`).then((r) => r.data ?? {}),
+    get<{ data: Json[] }>(`${DATA}/trades?user=${w}&limit=15`).then((r) => r.data ?? []),
+  ]);
+  if (!closed.length && !open.length && !trades.length) return null;
+  const record = trackRecord(closed);
+  const openPositions = open
+    .map((p) => ({
+      market: p.title, slug: p.slug, outcome: p.outcome,
+      size: round(Number(p.current_size)), avgPrice: Number(p.avg_price), currentPrice: Number(p.current_price),
+      valueUsd: Math.round(Number(p.current_value)), unrealizedPnl: Math.round(Number(p.unrealized_pnl)), endDate: p.end_date,
+    }))
+    .sort((a, b) => b.valueUsd - a.valueUsd);
+  const best = [...closed].sort((a, b) => b.realized_pnl - a.realized_pnl)[0];
+  const worst = [...closed].sort((a, b) => a.realized_pnl - b.realized_pnl)[0];
+  const pos = (p?: Json) => (p ? { market: p.title, outcome: p.outcome, realizedPnl: Math.round(p.realized_pnl) } : null);
+  const name = cleanName(trades[0]?.name || closed[0]?.name || open[0]?.name) ?? trades[0]?.pseudonym ?? null;
+
+  const notes: string[] = [];
+  if (record.tier === "unproven") notes.push(`only ${record.wins + record.losses} decided positions: too few to judge skill`);
+  else notes.push(`${record.tier}: wins ${Math.round(record.winRate! * 100)}% of ${record.wins + record.losses} recent decided positions, profit factor ${record.profitFactor ?? "∞"}`);
+  if (openPositions[0] && openPositions[0].valueUsd > 0.5 * Number(value.value ?? 0) && openPositions.length > 1)
+    notes.push(`concentrated: over half the open book is in "${openPositions[0].market}"`);
+
+  return {
+    wallet: w,
+    name,
+    profileUrl: `https://polymarket.com/profile/${w}`,
+    record: { ...record, sample: `last ${closed.length} closed positions` },
+    openBook: {
+      valueUsd: Math.round(Number(value.value ?? 0)),
+      positions: open.length,
+      unrealizedPnl: openPositions.reduce((a, p) => a + p.unrealizedPnl, 0),
+      top: openPositions.slice(0, 10),
+    },
+    bestTrade: pos(best),
+    worstTrade: pos(worst),
+    recentTrades: trades.slice(0, 10).map(shapeTrade),
+    signal: { notes },
+  };
+}
+
+export const CATEGORIES = ["overall", "politics", "sports", "crypto", "culture", "economics", "tech", "finance", "weather", "mentions"] as const;
+
+/** Polymarket leaderboard, enriched with each trader's win rate and tier from recent closed positions. */
+export async function topTraders(opts: { period: "day" | "week" | "month" | "all"; category: string; sortBy: "pnl" | "volume"; limit: number }) {
+  const res = await get<{ data: Json[] }>(
+    `${DATA}/leaderboard?limit=${opts.limit}&time_period=${opts.period}&category=${opts.category}&sort_by=${opts.sortBy === "volume" ? "VOLUME" : "PNL"}`,
+  );
+  const board = res.data ?? [];
+  const records = await mapLimit(board, 5, (r) => traderRecord(r.user_id, 200).catch(() => null));
+  const items = board.map((r, i) => ({
+    rank: r.rank,
+    wallet: r.user_id,
+    name: cleanName(r.user_name),
+    pnl: Math.round(r.pnl),
+    volume: Math.round(r.volume),
+    record: records[i],
+    profileUrl: `https://polymarket.com/profile/${r.user_id}`,
+  }));
+  return { ...opts, count: items.length, items };
+}
+
+/** Large trades with the trader's track record attached, and the money flow of proven traders only. */
+export async function smartMoney(opts: { minUsd: number; limit: number; slug?: string; enrich?: number }) {
+  let url = `${DATA}/trades?limit=${opts.limit}&filterType=CASH&filterAmount=${opts.minUsd}`;
+  if (opts.slug) {
+    const list = await get<Json[]>(`${GAMMA}/markets?slug=${encodeURIComponent(opts.slug)}`);
+    if (!list.length) return null;
+    url += `&condition_id=${list[0].conditionId}`;
+  }
+  const trades = ((await get<{ data: Json[] }>(url)).data ?? []).map(shapeTrade);
+
+  // Enrich the wallets that moved the most money (bounded, to keep the call fast).
+  const byWallet = new Map<string, number>();
+  for (const t of trades) byWallet.set(t.wallet, (byWallet.get(t.wallet) ?? 0) + t.usd);
+  const wallets = [...byWallet.entries()].sort((a, b) => b[1] - a[1]).slice(0, opts.enrich ?? 40).map(([w]) => w);
+  const recs = await mapLimit(wallets, 5, (w) => traderRecord(w, 200).catch(() => null));
+  const recOf = new Map(wallets.map((w, i) => [w, recs[i]]));
+
+  const annotated = trades.map((t) => {
+    const r = recOf.get(t.wallet);
+    return { ...t, traderTier: r?.tier ?? "unknown", traderWinRate: r?.winRate ?? null, traderRealizedPnl: r?.realizedPnl ?? null };
+  });
+  const smart = annotated.filter((t) => t.traderTier === "sharp" || t.traderTier === "profitable");
+  const tiers = annotated.reduce<Record<string, number>>((a, t) => ((a[t.traderTier] = (a[t.traderTier] ?? 0) + 1), a), {});
+
+  return {
+    minUsd: opts.minUsd,
+    market: opts.slug ?? null,
+    count: annotated.length,
+    smartTrades: smart.length,
+    tiers,
+    smartFlows: flows(smart).slice(0, 10),
+    allFlows: flows(trades).slice(0, 10),
+    trades: annotated,
+    method: "tier from each wallet's last 200 closed positions: sharp = win rate ≥55%, profit factor ≥1.3, net profit; needs ≥20 decided positions",
+  };
+}

@@ -22,7 +22,7 @@ export type AppOptions = {
   log?: (line: Record<string, unknown>) => void;
 };
 
-const SERVICE = { serviceName: "onchain-signals", tags: ["polymarket", "prediction-markets", "whales", "crypto", "analytics"] };
+const SERVICE = { serviceName: "onchain-signals", tags: ["polymarket", "prediction-markets", "whales", "smart-money", "traders", "crypto", "analytics"] };
 
 // What the HTTP API sells, derived from the shared tool definitions.
 export const CATALOG = Object.fromEntries(
@@ -32,7 +32,7 @@ export const CATALOG = Object.fromEntries(
       price: t.price,
       description: t.description,
       query: Object.fromEntries(
-        Object.entries(t.input).filter(([k]) => k !== "slug").map(([k, z]) => [k, (z as any).description ?? ""]),
+        Object.entries(t.input).filter(([k]) => !t.route.includes(`:${k}`)).map(([k, z]) => [k, (z as any).description ?? ""]),
       ),
     },
   ]),
@@ -106,7 +106,7 @@ export function createApp(o: AppOptions) {
     mcp: { endpoint: "/mcp", transport: "streamable-http", payment: "x402 per tool call" },
     resources: Object.entries(CATALOG).map(([route, r]) => {
       const [method, path] = route.split(" ");
-      return { method, path: path.replace("/:slug", "/{slug}"), ...r };
+      return { method, path: path.replace(/:(\w+)/g, "{$1}"), ...r };
     }),
   });
 
@@ -197,6 +197,30 @@ export function createApp(o: AppOptions) {
 
   app.get("/v1/market/:slug", async (c) => {
     const data = await pm.market(c.req.param("slug"), clamp(c.req.query("min"), 5_000, 100, 1e9));
+    return data ? c.json(data) : c.json({ error: "not_found" }, 404);
+  });
+
+  app.get("/v1/trader/:wallet", async (c) => {
+    const data = await pm.trader(c.req.param("wallet"));
+    return data ? c.json(data) : c.json({ error: "not_found", detail: "unknown or inactive wallet" }, 404);
+  });
+
+  app.get("/v1/traders/top", async (c) => {
+    const q = (k: string) => c.req.query(k);
+    const period = (["day", "week", "month", "all"] as const).find((p) => p === q("period")) ?? "month";
+    const category = pm.CATEGORIES.find((x) => x === q("category")) ?? "overall";
+    return c.json(await pm.topTraders({
+      period, category, sortBy: q("sortBy") === "volume" ? "volume" : "pnl", limit: clamp(q("limit"), 10, 1, 25),
+    }));
+  });
+
+  app.get("/v1/smart-money", async (c) => {
+    const slug = c.req.query("slug") || undefined;
+    const data = await pm.smartMoney({
+      minUsd: clamp(c.req.query("min"), 10_000, 1000, 1e9),
+      limit: clamp(c.req.query("limit"), 200, 1, 500),
+      slug,
+    });
     return data ? c.json(data) : c.json({ error: "not_found" }, 404);
   });
 
