@@ -9,6 +9,7 @@ import type { Ledger } from "./payments.js";
 import { TOOLS } from "./tools.js";
 import { remoteMcp } from "./remote-mcp.js";
 import { TERMS } from "./terms.js";
+import { llmsTxt, serverCard } from "./discovery.js";
 
 export type AppOptions = {
   payTo: string;
@@ -22,7 +23,7 @@ export type AppOptions = {
   log?: (line: Record<string, unknown>) => void;
 };
 
-const SERVICE = { serviceName: "onchain-signals", tags: ["polymarket", "prediction-markets", "whales", "smart-money", "traders", "crypto", "analytics"] };
+const SERVICE = { serviceName: "onchain-signals", tags: ["polymarket", "prediction-markets", "polymarket-traders", "win-rate", "smart-money", "whales", "leaderboard", "crypto", "analytics", "mcp"] };
 
 // What the HTTP API sells, derived from the shared tool definitions.
 export const CATALOG = Object.fromEntries(
@@ -103,7 +104,8 @@ export function createApp(o: AppOptions) {
     payTo: o.payTo || null,
     terms: "/terms",
     disclaimer: "Data and analytics only, not financial advice. Source: Polymarket public APIs; not affiliated with Polymarket.",
-    mcp: { endpoint: "/mcp", transport: "streamable-http", payment: "x402 per tool call" },
+    mcp: { endpoint: "/mcp", transport: "streamable-http", payment: "x402 per tool call", serverCard: "/.well-known/mcp.json", registry: "io.github.glibey/onchain-signals", npm: "onchain-signals-mcp" },
+    llms: "/llms.txt",
     resources: Object.entries(CATALOG).map(([route, r]) => {
       const [method, path] = route.split(" ");
       return { method, path: path.replace(/:(\w+)/g, "{$1}"), ...r };
@@ -124,6 +126,10 @@ export function createApp(o: AppOptions) {
   free.get("/", (c) => c.json(index()));
   free.get("/.well-known/x402", (c) => c.json(index()));
   free.get("/terms", (c) => c.text(TERMS));
+  const origin = (c: Context) => new URL(c.req.url).origin;
+  free.get("/llms.txt", (c) => c.text(llmsTxt(origin(c))));
+  free.get("/.well-known/mcp.json", (c) => c.json(serverCard(origin(c))));
+  free.get("/.well-known/mcp/server-card.json", (c) => c.json(serverCard(origin(c))));
   free.get("/health", (c) => c.json({ ok: true, cache: { hits: pm.cache.hits, misses: pm.cache.misses } }));
   app.route("/", free);
 
@@ -165,7 +171,8 @@ export function createApp(o: AppOptions) {
           ...SERVICE,
           // Bazaar: lets facilitators list us so agents can discover and call the endpoint on their own.
           extensions: declareDiscoveryExtension({
-            ...(t.example.query ? { input: t.example.query } : {}),
+            // Query params travel as strings; list them that way so indexers validate them as such.
+            ...(t.example.query ? { input: Object.fromEntries(Object.entries(t.example.query).map(([k, v]) => [k, String(v)])) } : {}),
             output: { example: t.example.output },
           }),
         },

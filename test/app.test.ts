@@ -147,12 +147,24 @@ describe("production hardening", () => {
     expect(lines.at(-1)).toMatchObject({ method: "GET", path: "/terms", status: 200, paid: false });
   });
 
+  it("serves llms.txt and an MCP server card with absolute URLs", async () => {
+    const { app } = setup();
+    const txt = await (await app.request("http://local.test/llms.txt")).text();
+    expect(txt).toContain("http://local.test/mcp");
+    expect(txt).toContain("get_smart_money ($0.05");
+    const card = await (await app.request("http://local.test/.well-known/mcp.json")).json();
+    expect(card.transport).toEqual({ type: "streamable-http", endpoint: "http://local.test/mcp" });
+    expect(card.tools.map((t: any) => t.name)).toContain("get_trader_profile");
+    expect(card.tools.find((t: any) => t.name === "get_trader_profile").inputSchema.required).toEqual(["wallet"]);
+  });
+
   it("advertises Bazaar discovery metadata in the 402", async () => {
     const { app } = setup();
     const res = await app.request("/v1/whales");
     const req = JSON.parse(Buffer.from(res.headers.get("payment-required")!, "base64").toString());
     expect(req.extensions?.bazaar).toBeDefined();
     expect(JSON.stringify(req.extensions.bazaar)).toContain("minUsd");
+    expect(req.extensions.bazaar.info.input.queryParams).toEqual({ min: "10000" });
   });
 });
 
