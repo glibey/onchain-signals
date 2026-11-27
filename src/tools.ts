@@ -37,7 +37,7 @@ const smartInput = {
 const toSlug = (s: string) => s.replace(/^.*\/market\//, "").replace(/[?#].*$/, "");
 
 type Shape = Record<string, z.ZodTypeAny>;
-export const VERSION = "0.4.0"; // keep in sync with package.json and server.json (checked by tests)
+export const VERSION = "0.4.1"; // keep in sync with package.json and server.json (checked by tests)
 
 /** MCP tool annotations: every tool only reads public market data. */
 export const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } as const;
