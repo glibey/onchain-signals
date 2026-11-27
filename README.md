@@ -1,5 +1,7 @@
 # onchain-signals-mcp
 
+[![Onchain Signals MCP server](https://mcprush.com/badge/onchain-signals-mcp/card.svg)](https://mcprush.com/to/onchain-signals-mcp?ref=badge)
+
 Prediction-market intelligence for AI agents, paid per call in USDC via [x402](https://x402.org). No sign-up, no API keys: your agent pays a cent or two per request from its own wallet.
 
 - **Market movers:** Polymarket markets with the biggest 1-day or 1-week price moves, filtered by volume.
